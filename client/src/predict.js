@@ -1,7 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 
 export function prepareData(data) {
-  const inputs = data.map(d => [d.rsi, d.macd, d.roc, d.close1, d.close2]);
+  const inputs = data.map(d => [d.rsi, d.macd, d.roc, d.close1, d.close2, d.close]);
   const outputs = data.map(d => d.close);
   return {
     inputs: tf.tensor2d(inputs),
@@ -11,7 +11,7 @@ export function prepareData(data) {
 
 export function buildModel() {
   const model = tf.sequential();
-  model.add(tf.layers.dense({ units: 10, activation: 'relu', inputShape: [5] }));
+  model.add(tf.layers.dense({ units: 10, activation: 'relu', inputShape: [6] }));
   model.add(tf.layers.dense({ units: 1 }));
   model.compile({ optimizer: 'adam', loss: 'meanSquaredError' });
   return model;
