@@ -41,21 +41,6 @@ const calculateIndicators = (prices) => {
   return { macd, rsi, bbands, close, volume, roc };
 };
 
-/**
-app.get('/api/indicators/:symbol', async (req, res) => {
-  const symbol = req.params.symbol.toUpperCase();
-  try {
-    const response = await axios.get(`https://financialmodelingprep.com/api/v3/historical-chart/1hour/${symbol}?apikey=${API_KEY}`);
-    const prices = response.data.reverse();
-    const indicators = calculateIndicators(prices);
-    res.json(indicators);
-  } catch (error) {
-    console.error('Error fetching or processing data:', error.message);
-    res.status(500).json({ error: 'Failed to fetch stock data' });
-  }
-});
-**/
-
 app.get('/api/indicators/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const interval = req.query.interval || 'daily';
@@ -80,14 +65,7 @@ app.get('/api/indicators/:symbol', async (req, res) => {
     }
 
     // Your indicator calculations go here...
-/**
-    const enriched = calculateIndicators(filtered); // however you apply RSI, MACD, etc.
-    console.log('Enriched type:', typeof enriched);
-    console.log('Is array?', Array.isArray(enriched));
-    console.log('Enriched sample:', enriched?.slice?.(0,3));
-    const sorted = enriched.data.sort((a,b) => new Date(a.date) - new Date(b.date));
-    res.json(sorted);
-**/
+
 const indicators = calculateIndicators(filtered);
 const enriched = filtered.map((item, i) => ({
   date: item.date,
@@ -101,7 +79,59 @@ const enriched = filtered.map((item, i) => ({
   roc: indicators.roc[i] ?? null,
 }));
 
+/**const sorted = enriched.sort((a, b) => new Date(a.date) - new Date(b.date));
+res.json(sorted);
+**/
+
+const tf = require('@tensorflow/tfjs-node');
+
+// Sort oldest to newest
 const sorted = enriched.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+// Prepare input features and labels
+const inputs = [];
+const labels = [];
+
+for (let i = 2; i < sorted.length; i++) {
+  const macd = sorted[i].macd;
+  const close1 = sorted[i - 1].close;
+  const close2 = sorted[i - 2].close;
+
+  if (macd != null && close1 != null && close2 != null && sorted[i].close != null) {
+    inputs.push([macd, close1, close2]);
+    labels.push([sorted[i].close]);
+  }
+}
+
+// Train the model
+const xs = tf.tensor2d(inputs);
+const ys = tf.tensor2d(labels);
+
+const model = tf.sequential();
+model.add(tf.layers.dense({ inputShape: [3], units: 10, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 1 }));
+
+model.compile({ loss: 'meanSquaredError', optimizer: 'adam' });
+await model.fit(xs, ys, { epochs: 20 });
+
+const preds = model.predict(xs);
+const predictedValues = await preds.array();
+
+// Add predictions back to the original sorted array
+let predIndex = 0;
+for (let i = 2; i < sorted.length; i++) {
+  const macd = sorted[i].macd;
+  const close1 = sorted[i - 1].close;
+  const close2 = sorted[i - 2].close;
+
+  if (macd != null && close1 != null && close2 != null) {
+    sorted[i].prediction = predictedValues[predIndex][0];
+    predIndex++;
+  } else {
+    sorted[i].prediction = null;
+  }
+}
+
 res.json(sorted);
 
 

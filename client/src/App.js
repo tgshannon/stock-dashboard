@@ -21,7 +21,7 @@ const App = () => {
 
       console.log('Received enriched data:', enriched);
 
-      setChartData(enriched);
+      setChartData(enriched.slice(-100));
     } catch (err) {
       console.error('Error fetching indicators:', err);
     }
