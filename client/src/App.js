@@ -1,136 +1,230 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useEffect, useState } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, BarChart, Bar
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, ReferenceArea
 } from 'recharts';
+import Modal from 'react-modal';
 
 const App = () => {
-  const [symbol, setSymbol] = useState('');
-  const [inputSymbol, setInputSymbol] = useState('AAPL');
-  const [interval, setInterval] = useState('monthly');
+  const [symbol, setSymbol] = useState('AAPL');
+  const [interval, setInterval] = useState('daily');
   const [chartData, setChartData] = useState([]);
+  const [displayData, setDisplayData] = useState([]);
   const [mape, setMape] = useState(null);
+  const [accuracy, setAccuracy] = useState(null);
+  const [labelCounts, setLabelCounts] = useState({});
+  const [mode, setMode] = useState('both');
+  const [showRSI, setShowRSI] = useState(false);
+  const [showBB, setShowBB] = useState(false);
+  const [showPrediction, setShowPrediction] = useState(true);
+  const [showAction, setShowAction] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const computeVolumeSMA = (data, window = 10) => {
-    return data.map((d, i) => {
-      if (i < window - 1) return { ...d, volumeSMA: null };
-      const slice = data.slice(i - window + 1, i + 1);
-      const sum = slice.reduce((acc, val) => acc + (val.volume || 0), 0);
-      return { ...d, volumeSMA: sum / window };
-    });
-  };
-
-  const fetchData = async (selectedSymbol, selectedInterval) => {
+  const fetchData = async () => {
+    setChartData([]);
+    setDisplayData([]);
     try {
-      const res = await axios.get(`/api/indicators/${selectedSymbol}`, {
-        params: { interval: selectedInterval }
-      });
-      const { data, mape } = res.data;
-
-      // Flag up/down days
-      const enriched = data.map((d, i) => ({
-        ...d,
-        up: i > 0 ? d.close >= data[i - 1].close : true
-      }));
-
-      // Compute volume SMA
-      const final = computeVolumeSMA(enriched);
-
-      setSymbol(selectedSymbol);
-      setChartData(final.slice(-100));
-      setMape(mape);
+      const res = await fetch(`/api/indicators/${symbol}?interval=${interval}`);
+      const json = await res.json();
+      setChartData(json.data || []);
+      setMape(json.mape || null);
+      setAccuracy(json.accuracy || null);
+      setLabelCounts(json.labelCounts || null);
     } catch (err) {
-      console.error('Error fetching indicators:', err);
+      console.error('Fetch error:', err.message);
     }
   };
 
+  useEffect(() => {
+    const sliced = chartData.slice(-100);
+    setDisplayData(sliced);
+    console.log('📊 displayData (last 100):', sliced);
+  }, [chartData]);
+
+  const backgroundBands = (mode === 'action' || mode === 'both') && showAction
+    ? displayData
+        .filter((d, i) => d.action && displayData[i + 1])
+        .map((d, i) => ({
+          x1: d.date,
+          x2: displayData[i + 1].date,
+          color:
+            d.action === 'buy'
+              ? 'rgba(144,238,144,0.3)'
+              : d.action === 'sell'
+              ? 'rgba(255,99,71,0.3)'
+              : 'rgba(255,255,102,0.2)',
+        }))
+    : [];
+
+  console.log('🎨 backgroundBands:', backgroundBands);
+
+  const latestAction = [...displayData].reverse().find(d => d.action);
+
   return (
     <div style={{ padding: '1rem' }}>
-      <h2>Stock Dashboard</h2>
+      <h2>{symbol} Stock Dashboard</h2>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <label>Symbol:&nbsp;</label>
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        Symbol:{' '}
         <input
-          value={inputSymbol}
-          onChange={(e) => setInputSymbol(e.target.value.toUpperCase())}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              fetchData(inputSymbol, interval);
-            }
-          }}
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+          style={{ width: 100 }}
         />
-        &nbsp;
-        <label>Interval:&nbsp;</label>
+        Interval:{' '}
         <select value={interval} onChange={(e) => setInterval(e.target.value)}>
           <option value="daily">Daily</option>
           <option value="monthly">Monthly</option>
         </select>
-        &nbsp;
-        <button onClick={() => fetchData(inputSymbol, interval)}>Go</button>
+        Mode:{' '}
+        <select value={mode} onChange={(e) => setMode(e.target.value)}>
+          <option value="price">Price Prediction</option>
+          <option value="action">Action Classification</option>
+          <option value="both">Both</option>
+        </select>
+        <button onClick={fetchData}>Go</button>
+        <div style={{ marginLeft: '2rem' }}>   
+          <strong>Action:</strong>{' '}
+          {latestAction?.action ? latestAction.action.toUpperCase() : 'N/A'}<br />
+          <strong>Confidence:</strong>{' '}
+          {latestAction?.confidence ? (latestAction.confidence * 100).toFixed(1) + '%' : 'N/A'}
+        </div>
       </div>
 
-      {symbol && (
-        <>
-          <h3>{symbol} Price, Prediction & Indicators ({interval})</h3>
-          {mape && <p>Prediction Accuracy (MAPE): <strong>{mape}%</strong></p>}
+       {(mape || accuracy) && (
+          <div style={{ marginBottom: '1rem', background: '#f9f9f9', padding: '1rem', borderRadius: '8px', width: 'fit-content' }}>
+            <h4 style={{ margin: 0 }}>📊 Model Stats</h4>
+            {mape && <div><strong>MAPE:</strong> {(mape * 100).toFixed(2)}%</div>}
+            {accuracy && <div><strong>Accuracy:</strong> {(accuracy * 100).toFixed(2)}%</div>}
+            {labelCounts && (
+          <div>
+            <strong>Labels:</strong>{' '}
+            Buy: {labelCounts.buy ?? 0}, Hold: {labelCounts.hold ?? 0}, Sell: {labelCounts.sell ?? 0}
+          </div>
+        )}
+      </div>
+    )}
 
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart
-              data={chartData}
-              margin={{ top: 20, right: 30, left: 40, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis yAxisId="left" domain={['auto', 'auto']} />
-              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} />
-              <Tooltip />
-              <Legend />
-              <Line yAxisId="left" dataKey="close" stroke="#8884d8" dot={false} />
-              <Line yAxisId="left" dataKey="prediction" stroke="#ff7300" dot={false} strokeDasharray="4 2" />
-              <Line yAxisId="left" dataKey="bb_upper" stroke="#00C49F" dot={false} />
-              <Line yAxisId="left" dataKey="bb_lower" stroke="#FFBB28" dot={false} />
-              <Line yAxisId="right" dataKey="rsi" stroke="#888888" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
 
-          <h4>Volume</h4>
-          <ResponsiveContainer width="100%" height={150}>
-            <BarChart
-              data={chartData}
-              margin={{ top: 10, right: 20, left: 40, bottom: 0 }}
-            >
-              <XAxis dataKey="date" hide />
-              <YAxis
-                domain={[0, 'auto']}
-                tickFormatter={(val) => `${(val / 1_000_000).toFixed(0)}M`}
-              />
-              <Tooltip
-                formatter={(value, name) =>
-                  name === 'volumeSMA'
-                    ? [`${Math.round(value).toLocaleString()}`, 'SMA Volume']
-                    : [`${Math.round(value).toLocaleString()}`, 'Volume']
-                }
-              />
-              <Bar
-                dataKey="volume"
-                shape={(props) => {
-                  const { x, y, width, height, payload } = props;
-                  const color = payload.up ? '#4caf50' : '#f44336';
-                  return <rect x={x} y={y} width={width} height={height} fill={color} />;
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="volumeSMA"
-                stroke="#000"
-                strokeWidth={2}
-                dot={false}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </>
-      )}
+      <ResponsiveContainer width="100%" height={400}>
+        <LineChart data={displayData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="date" />
+          <YAxis yAxisId="left" domain={['auto', 'auto']} />
+          <YAxis yAxisId="right" orientation="right" domain={[0, 100]} />
+          <Tooltip
+            formatter={(value, name, props) => {
+              const { payload } = props;
+              const action = payload?.action;
+              const confidence = payload?.confidence;
+              if (name === 'Close' && action) {
+                return [`${value} (${action.toUpperCase()}, ${(confidence * 100).toFixed(1)}%)`, name];
+              }
+              console.log('Tooltip payload:', payload);
+              return [value, name];
+            }}
+          />
+
+          {backgroundBands.length === 0 && (
+            <text x={100} y={40} fill="red">
+              No zones found — check action/classification data.
+            </text>
+          )}
+
+          {backgroundBands.map((b, i) => (
+            <ReferenceArea key={i} x1={b.x1} x2={b.x2} strokeOpacity={0} fill={b.color} />
+          ))}
+
+          <Line dataKey="close" stroke="#000" dot={false} name="Close" yAxisId="left" />
+
+          {showBB && (
+            <>
+              <Line dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" yAxisId="left" />
+              <Line dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" yAxisId="left" />
+            </>
+          )}
+
+          {showPrediction && (mode === 'price' || mode === 'both') && (
+            <Line
+              dataKey="prediction"
+              stroke="#8884d8"
+              dot={false}
+              name="Prediction"
+              yAxisId="left"
+            />
+          )}
+
+          {showRSI && (
+            <Line
+              dataKey="rsi"
+              stroke="#888888"
+              dot={false}
+              name="RSI"
+              yAxisId="right"
+              strokeDasharray="3 3"
+            />
+          )}
+        </LineChart>
+      </ResponsiveContainer>
+
+      <ResponsiveContainer width="100%" height={100}>
+        <AreaChart data={displayData}>
+          <XAxis dataKey="date" hide />
+          <YAxis domain={['auto', 'auto']} />
+          <Tooltip />
+          <Area dataKey="volume" stroke="#8884d8" fill="#82ca9d" />
+        </AreaChart>
+      </ResponsiveContainer>
+
+      <button
+        onClick={() => setIsModalOpen(true)}
+        style={{
+          position: 'fixed',
+          bottom: 20,
+          right: 20,
+          background: '#eee',
+          border: '1px solid #ccc',
+          padding: '0.5rem',
+          borderRadius: '50%',
+          fontSize: '20px',
+          cursor: 'pointer',
+        }}
+      >
+        ⚙️
+      </button>
+
+      <Modal
+        isOpen={isModalOpen}
+        onRequestClose={() => setIsModalOpen(false)}
+        style={{
+          content: {
+            top: '40%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+          },
+        }}
+      >
+        <h3>Chart Settings</h3>
+        <label>
+          <input type="checkbox" checked={showRSI} onChange={() => setShowRSI(!showRSI)} /> Show RSI
+        </label>
+        <br />
+        <label>
+          <input type="checkbox" checked={showBB} onChange={() => setShowBB(!showBB)} /> Show Bollinger Bands
+        </label>
+        <br />
+        <label>
+          <input type="checkbox" checked={showPrediction} onChange={() => setShowPrediction(!showPrediction)} /> Show Price Prediction
+        </label>
+        <br />
+        <label>
+          <input type="checkbox" checked={showAction} onChange={() => setShowAction(!showAction)} /> Show Buy/Sell/Hold Zones
+        </label>
+        <br />
+        <button onClick={() => setIsModalOpen(false)} style={{ marginTop: '1rem' }}>
+          Close
+        </button>
+      </Modal>
     </div>
   );
 };

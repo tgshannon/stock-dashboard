@@ -1,4 +1,26 @@
-.DS_Store
+# Node modules
 node_modules/
-client/node_modules
+
+# Environment files
+.env
+
+# Logs and runtime
+*.log
+model_summary.csv
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Build and temp files
+dist/
+build/
+.cache/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
 

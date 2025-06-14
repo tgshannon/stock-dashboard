@@ -1,0 +1,19 @@
+{
+  "name": "stock-dashboard-server",
+  "version": "1.0.0",
+  "description": "Backend server for stock dashboard using FMP API and TensorFlow.js",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.15.0",
+    "axios": "^1.6.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
+  "author": "Terry Shannon",
+  "license": "MIT"
+}
+
