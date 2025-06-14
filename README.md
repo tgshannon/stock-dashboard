@@ -1,3 +1,4 @@
+/src
 # 📈 Stock Dashboard with Machine Learning
 
 This project provides an interactive dashboard for visualizing stock data and applying two machine learning models:
