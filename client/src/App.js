@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  AreaChart, Area, ReferenceArea
+  AreaChart, Area, ReferenceArea, Legend
 } from 'recharts';
 import Modal from 'react-modal';
 
@@ -13,16 +13,17 @@ const App = () => {
   const [mape, setMape] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
   const [labelCounts, setLabelCounts] = useState({});
-  const [mode, setMode] = useState('both');
   const [showRSI, setShowRSI] = useState(false);
-  const [showBB, setShowBB] = useState(false);
+  const [showBB, setShowBB] = useState(true);
   const [showPrediction, setShowPrediction] = useState(true);
   const [showAction, setShowAction] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const fetchData = async () => {
     setChartData([]);
     setDisplayData([]);
+    setLoading(true);
     try {
       const res = await fetch(`/api/indicators/${symbol}?interval=${interval}`);
       const json = await res.json();
@@ -33,15 +34,23 @@ const App = () => {
     } catch (err) {
       console.error('Fetch error:', err.message);
     }
+    setLoading(false);
   };
 
-  useEffect(() => {
-    const sliced = chartData.slice(-100);
-    setDisplayData(sliced);
-    console.log('📊 displayData (last 100):', sliced);
-  }, [chartData]);
+//  useEffect(() => {
+//
+//   const sliced = chartData.slice(-100);
+//    setDisplayData(sliced);
+//  }, [chartData]);
 
-  const backgroundBands = (mode === 'action' || mode === 'both') && showAction
+    useEffect(() => {
+      const filtered = chartData.filter(d => d.bb_upper !== null && d.bb_lower !== null);
+      const sliced = filtered.slice(-100);
+      setDisplayData(sliced);
+    }, [chartData]);
+
+
+  const backgroundBands = showAction
     ? displayData
         .filter((d, i) => d.action && displayData[i + 1])
         .map((d, i) => ({
@@ -56,12 +65,10 @@ const App = () => {
         }))
     : [];
 
-  console.log('🎨 backgroundBands:', backgroundBands);
-
   const latestAction = [...displayData].reverse().find(d => d.action);
 
   return (
-    <div style={{ padding: '1rem' }}>
+    <div style={{ padding: '1rem', cursor: loading ? 'wait' : 'default' }}>
       <h2>{symbol} Stock Dashboard</h2>
 
       <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -76,14 +83,8 @@ const App = () => {
           <option value="daily">Daily</option>
           <option value="monthly">Monthly</option>
         </select>
-        Mode:{' '}
-        <select value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value="price">Price Prediction</option>
-          <option value="action">Action Classification</option>
-          <option value="both">Both</option>
-        </select>
         <button onClick={fetchData}>Go</button>
-        <div style={{ marginLeft: '2rem' }}>   
+        <div style={{ marginLeft: '2rem' }}>
           <strong>Action:</strong>{' '}
           {latestAction?.action ? latestAction.action.toUpperCase() : 'N/A'}<br />
           <strong>Confidence:</strong>{' '}
@@ -91,27 +92,26 @@ const App = () => {
         </div>
       </div>
 
-       {(mape || accuracy) && (
-          <div style={{ marginBottom: '1rem', background: '#f9f9f9', padding: '1rem', borderRadius: '8px', width: 'fit-content' }}>
-            <h4 style={{ margin: 0 }}>📊 Model Stats</h4>
-            {mape && <div><strong>MAPE:</strong> {(mape * 100).toFixed(2)}%</div>}
-            {accuracy && <div><strong>Accuracy:</strong> {(accuracy * 100).toFixed(2)}%</div>}
-            {labelCounts && (
-          <div>
-            <strong>Labels:</strong>{' '}
-            Buy: {labelCounts.buy ?? 0}, Hold: {labelCounts.hold ?? 0}, Sell: {labelCounts.sell ?? 0}
-          </div>
-        )}
-      </div>
-    )}
-
+      {(mape || accuracy) && (
+        <div style={{ marginBottom: '1rem', background: '#f9f9f9', padding: '1rem', borderRadius: '8px', width: 'fit-content' }}>
+          <h4 style={{ margin: 0 }}>📊 Model Stats</h4>
+          {mape && <div><strong>MAPE:</strong> {(mape * 100).toFixed(2)}%</div>}
+          {accuracy && <div><strong>Accuracy:</strong> {(accuracy * 100).toFixed(2)}%</div>}
+          {labelCounts && (
+            <div>
+              <strong>Labels:</strong>{' '}
+              Buy: {labelCounts.buy ?? 0}, Hold: {labelCounts.hold ?? 0}, Sell: {labelCounts.sell ?? 0}
+            </div>
+          )}
+        </div>
+      )}
 
       <ResponsiveContainer width="100%" height={400}>
         <LineChart data={displayData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" />
           <YAxis yAxisId="left" domain={['auto', 'auto']} />
-          <YAxis yAxisId="right" orientation="right" domain={[0, 100]} />
+          <YAxis yAxisId="right" orientation="right" domain={[0, 100]} hide={!showRSI} />
           <Tooltip
             formatter={(value, name, props) => {
               const { payload } = props;
@@ -120,16 +120,10 @@ const App = () => {
               if (name === 'Close' && action) {
                 return [`${value} (${action.toUpperCase()}, ${(confidence * 100).toFixed(1)}%)`, name];
               }
-              console.log('Tooltip payload:', payload);
               return [value, name];
             }}
           />
-
-          {backgroundBands.length === 0 && (
-            <text x={100} y={40} fill="red">
-              No zones found — check action/classification data.
-            </text>
-          )}
+          <Legend />
 
           {backgroundBands.map((b, i) => (
             <ReferenceArea key={i} x1={b.x1} x2={b.x2} strokeOpacity={0} fill={b.color} />
@@ -137,16 +131,18 @@ const App = () => {
 
           <Line dataKey="close" stroke="#000" dot={false} name="Close" yAxisId="left" />
 
+
           {showBB && (
-            <>
-              <Line dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" yAxisId="left" />
-              <Line dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" yAxisId="left" />
-            </>
+            <Line dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" yAxisId="left" />
           )}
 
-          {showPrediction && (mode === 'price' || mode === 'both') && (
+          {showBB && (
+            <Line dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" yAxisId="left" />
+          )}
+
+          {showPrediction && (
             <Line
-              dataKey="prediction"
+              dataKey="predicted"
               stroke="#8884d8"
               dot={false}
               name="Prediction"
@@ -165,6 +161,7 @@ const App = () => {
             />
           )}
         </LineChart>
+<p>Debug: showBB = {String(showBB)}</p>
       </ResponsiveContainer>
 
       <ResponsiveContainer width="100%" height={100}>
