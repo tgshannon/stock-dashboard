@@ -1,25 +1,15 @@
 const tf = require('@tensorflow/tfjs-node');
 const { buildMatrix } = require('./features');
 
-/**
- * Train a 3-way classifier (buy/hold/sell) using indicator-enriched price data.
- *
- * @param {Array} data       Enriched input data with close, MACD, RSI, etc.
- * @param {number} lookahead How many steps forward to label action
- * @param {number} epochs    Number of epochs to train
- * @param {string[]} features Features used as input (e.g., ['close1', 'macd', ...])
- */
 async function trainClassifier(data, lookahead, epochs, features) {
-  if (typeof epochs !== 'number' || epochs <= 0) {
-    throw new Error(`trainClassifier: invalid epochs ${epochs}. Must pass a positive number from server.`);
-  }
-  if (!Array.isArray(features) || features.length === 0) {
-    throw new Error('trainClassifier: features array is missing or empty.');
+  if (!features || !Array.isArray(features) || features.length === 0) {
+    throw new Error(`trainClassifier: invalid features passed: ${features}`);
   }
 
-  // Build X (inputs), Y (one-hot labels), and meta (indexes for mapping back)
+  console.log('🧠 [Classify] Features passed to classifier:', features);
+
   const { X, Y, meta } = buildMatrix(data, features, true, lookahead);
-  if (X.length === 0 || Y.length === 0) {
+  if (!X.length || !Y.length) {
     console.warn('⚠️ Classification skipped: no training samples.');
     return { data, accuracy: null, labelCounts: {} };
   }
@@ -28,7 +18,7 @@ async function trainClassifier(data, lookahead, epochs, features) {
   console.log('🔍 [Classify] Before training:', tf.memory());
 
   const xs = tf.tensor2d(X);
-  const ys = tf.tensor2d(Y);
+  const ys = tf.oneHot(tf.tensor1d(Y, 'int32'), 3); // 🔥 fix: convert labels to one-hot
 
   const optimizer = tf.train.adam();
   const model = tf.sequential();
@@ -38,7 +28,7 @@ async function trainClassifier(data, lookahead, epochs, features) {
   model.compile({
     loss: 'categoricalCrossentropy',
     optimizer,
-    metrics: ['categoricalAccuracy'], // ✅ Use correct metric for one-hot labels
+    metrics: ['categoricalAccuracy'],
   });
 
   const result = await model.fit(xs, ys, { epochs });
@@ -71,7 +61,7 @@ async function trainClassifier(data, lookahead, epochs, features) {
     labelCounts[label]++;
   });
 
-  return { data, accuracy: finalAccuracy, labelCounts };
+  return { updatedData: data, accuracy: finalAccuracy, labelCounts };
 }
 
 module.exports = { trainClassifier };

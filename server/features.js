@@ -1,25 +1,62 @@
-function buildMatrix(data, features, includeLabel = false, lookahead = 5) {
-  const X = [], Y = [], meta = [];
+function buildMatrix(data, features, isClassification = false, lookahead = 1) {
+  const knownFeatures = new Set(['close1', 'close2', 'macd', 'rsi', 'predicted']);
 
-  for (let i = 2; i < data.length - (includeLabel ? lookahead : 1); i++) {
-    const row = features.map(f => data[i][f] ?? 0);
-    X.push(row);
+  if (!Array.isArray(features) || features.length === 0) {
+    throw new Error(`❌ buildMatrix: invalid features list: ${features}`);
+  }
 
-    if (includeLabel) {
-      const future = data[i + lookahead];
-      if (!future) continue;
-      const change = (future.close - data[i].close) / data[i].close;
-      let label = 'hold';
-      if (change > 0.03) label = 'buy';
-      if (change < -0.03) label = 'sell';
-      Y.push([label === 'buy' ? 1 : 0, label === 'hold' ? 1 : 0, label === 'sell' ? 1 : 0]);
-      meta.push({ index: i, action: label });
+  const unknowns = features.filter(f => !knownFeatures.has(f));
+  if (unknowns.length) {
+    console.warn(`⚠️ buildMatrix: unknown features detected: ${unknowns.join(', ')}`);
+  }
+
+  const X = [];
+  const Y = [];
+  const meta = [];
+  const offset = isClassification ? lookahead : 1;
+
+  for (let i = 0; i < data.length - offset; i++) {
+    const xRow = [];
+
+    for (const feature of features) {
+      if (feature === 'close1') {
+        xRow.push(data[i].close);
+      } else if (feature === 'close2') {
+        xRow.push(data[i + 1]?.close ?? data[i].close);
+      } else if (feature === 'macd') {
+        xRow.push(data[i].macd ?? 0);
+      } else if (feature === 'rsi') {
+        xRow.push(data[i].rsi ?? 50);
+      } else if (feature === 'predicted') {
+        xRow.push(data[i].predicted ?? data[i].close);
+      } else {
+        xRow.push(0); // fallback for unknowns
+      }
+    }
+
+    const futureIndex = i + lookahead;
+    if (isClassification) {
+      const current = data[i].close;
+      const future = data[futureIndex]?.close;
+      if (future !== undefined) {
+        const delta = (future - current) / current;
+        let label = 1;
+        if (delta > 0.03) label = 0;
+        else if (delta < -0.03) label = 2;
+
+        X.push(xRow);
+        Y.push(label);
+        meta.push({ index: i, label });
+      }
     } else {
-      Y.push(data[i + 1].close);
+      const yVal = data[i + 1]?.close;
+      if (yVal !== undefined) {
+        X.push(xRow);
+        Y.push(yVal);
+      }
     }
   }
 
-  console.log(`Built matrix X=${X.length}, Y=${Y.length}`);
   return { X, Y, meta };
 }
 

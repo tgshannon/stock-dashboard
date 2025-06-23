@@ -23,6 +23,11 @@ async function trainAndPredict(data, features, epochs = 20) {
   await model.fit(xs, ys, { epochs });
 
   const preds = model.predict(xs).dataSync();
+  // ✅ Add predicted values directly to the original data array
+  for (let i = 0; i < preds.length; i++) {
+    data[i + 1].predicted = preds[i]; // offset to match yVal = data[i+1].close
+  }
+
   const result = data.slice(0, preds.length).map((d, i) => ({
     ...d,
     predicted: preds[i],
@@ -34,13 +39,13 @@ async function trainAndPredict(data, features, epochs = 20) {
     return sum + Math.abs((actual - predicted) / actual);
   }, 0) / preds.length;
 
-  tf.dispose([xs, ys]);
-  model.dispose();
-  optimizer.dispose();
+  tf.dispose([xs, ys, model, optimizer]);
+//  model.dispose();
+//  optimizer.dispose();
 
   console.log('✅ [Predict] After training:', tf.memory());
 
-  return { data: result, mape };
+  return { predictions: data, mape };
 }
 
 module.exports = { trainAndPredict };
