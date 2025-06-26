@@ -13,6 +13,7 @@ const defaultFeatures = ['close1', 'close2', 'macd'];
 const App = () => {
   const [symbol, setSymbol] = useState('AAPL');
   const [interval, setInterval] = useState('daily');
+  const [ruleSet, setRuleSet] = useState('pct');
   const [chartData, setChartData] = useState([]);
   const [predictionFeatures, setPredictionFeatures] = useState(defaultFeatures);
   const [classificationFeatures, setClassificationFeatures] = useState(defaultFeatures);
@@ -37,7 +38,8 @@ const App = () => {
       const res = await axios.get(`/api/indicators/${symbol}?interval=${interval}`, {
         params: {
           predFeatures: predictionFeatures.join(','),
-          classFeatures: classificationFeatures.join(',')
+          classFeatures: classificationFeatures.join(','),
+          ruleSet
         }
       });
 
@@ -84,6 +86,13 @@ const App = () => {
           <select value={interval} onChange={e => setInterval(e.target.value)}>
             <option value="daily">Daily</option>
             <option value="monthly">Monthly</option>
+          </select>
+
+          <label>Rule:</label>
+          <select value={ruleSet} onChange={e => setRuleSet(e.target.value)}>
+            <option value="pct">% Price Change</option>
+            <option value="macd-cross">MACD Cross</option>
+            <option value="macd-direction">MACD Direction</option>
           </select>
 
           <button onClick={handleGo}>Go</button>
