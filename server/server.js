@@ -35,6 +35,11 @@ app.get('/api/indicators/:symbol', async (req, res) => {
     const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?serietype=line&apikey=${process.env.FMP_API_KEY}`;
     const fmpRes = await axios.get(url);
 
+    // Fetch historical key metrics
+    const metricsUrl = `https://financialmodelingprep.com/api/v3/key-metrics/${symbol}?limit=20&apikey=${process.env.FMP_API_KEY}`;
+    const metricsRes = await axios.get(metricsUrl);
+    const keyMetricsArray = metricsRes.data || [];
+
     let raw = [...(fmpRes.data?.historical || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     let filtered;
@@ -113,7 +118,13 @@ app.get('/api/indicators/:symbol', async (req, res) => {
       accuracy,
       labelCounts,
       actionInfo,
-      nextPrediction
+      nextPrediction,
+      fundamentals: keyMetricsArray.map(m => ({
+        date: m.date,
+        freeCashFlowPerShare: m.freeCashFlowPerShare,
+        returnOnTangibleAssets: parseFloat( m.returnOnTangibleAssets) * 100  
+      }))
+
     });
   } catch (err) {
     console.error('❌ Server error:', err);

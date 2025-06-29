@@ -1,3 +1,4 @@
+// ✅ Full working version of App.js — restored prediction/classification chart + fundamentals chart
 import React, { useState } from 'react';
 import axios from 'axios';
 import {
@@ -22,6 +23,7 @@ const App = () => {
   const [labelCounts, setLabelCounts] = useState(null);
   const [actionInfo, setActionInfo] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [fundamentals, setFundamentals] = useState([]);
 
   const featureOptions = ['close1', 'close2', 'macd', 'rsi', 'predicted'];
 
@@ -43,7 +45,7 @@ const App = () => {
         }
       });
 
-      const { data, mape, accuracy, labelCounts, actionInfo } = res.data;
+      const { data, mape, accuracy, labelCounts, actionInfo, fundamentals } = res.data;
 
       const enhancedData = data.map(d => ({
         ...d,
@@ -57,6 +59,7 @@ const App = () => {
       setActionInfo(actionInfo);
       setAccuracy(accuracy);
       setLabelCounts(labelCounts);
+      setFundamentals(fundamentals);
     } catch (err) {
       console.error('Fetch error:', err);
     }
@@ -99,22 +102,12 @@ const App = () => {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          {predictionFeatures.length > 0 && (
-            <div><strong>Prediction Features:</strong> {predictionFeatures.join(', ')}</div>
-          )}
+          <div><strong>Prediction Features:</strong> {predictionFeatures.join(', ')}</div>
           {mape != null && <div><strong>MAPE:</strong> {mape.toFixed(4)}</div>}
-          {classificationFeatures.length > 0 && (
-            <div><strong>Classification Features:</strong> {classificationFeatures.join(', ')}</div>
-          )}
+          <div><strong>Classification Features:</strong> {classificationFeatures.join(', ')}</div>
           {accuracy != null && <div><strong>Accuracy:</strong> {(accuracy * 100).toFixed(2)}%</div>}
-          {actionInfo && (
-            <div><strong>Action:</strong> {actionInfo.label} ({(actionInfo.confidence * 100).toFixed(1)}%)</div>
-          )}
-          {labelCounts && (
-            <div>
-              Buy: {labelCounts.buy}, Hold: {labelCounts.hold}, Sell: {labelCounts.sell}
-            </div>
-          )}
+          {actionInfo && <div><strong>Action:</strong> {actionInfo.label} ({(actionInfo.confidence * 100).toFixed(1)}%)</div>}
+          {labelCounts && <div>Buy: {labelCounts.buy}, Hold: {labelCounts.hold}, Sell: {labelCounts.sell}</div>}
           <button onClick={() => setIsModalOpen(true)} style={{ marginTop: '0.5rem' }}>⚙️</button>
         </div>
       </div>
@@ -124,7 +117,7 @@ const App = () => {
           <LineChart data={chartData}>
             <CartesianGrid stroke="#ccc" />
             <XAxis dataKey="date" />
-            <YAxis domain={['auto', 'auto']} yAxisId="left" />
+            <YAxis yAxisId="left" domain={['auto', 'auto']} />
             <YAxis orientation="right" yAxisId="right" domain={[0, 100]} />
             <Tooltip
               content={({ active, payload, label }) => {
@@ -138,18 +131,13 @@ const App = () => {
                         {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(2) : entry.value}
                       </div>
                     ))}
-                    {dataPoint.action && (
-                      <div><strong>Class:</strong> {dataPoint.action}</div>
-                    )}
-                    {dataPoint.confidence != null && (
-                      <div><strong>Confidence:</strong> {(dataPoint.confidence * 100).toFixed(1)}%</div>
-                    )}
+                    {dataPoint.action && <div><strong>Class:</strong> {dataPoint.action}</div>}
+                    {dataPoint.confidence != null && <div><strong>Confidence:</strong> {(dataPoint.confidence * 100).toFixed(1)}%</div>}
                   </div>
                 );
               }}
             />
             <Legend />
-
             <Line dataKey="close_buy" stroke="green" dot={false} strokeWidth={2} name="Close (Buy)" yAxisId="left" />
             <Line dataKey="close_hold" stroke="gray" dot={false} strokeWidth={2} name="Close (Hold)" yAxisId="left" />
             <Line dataKey="close_sell" stroke="red" dot={false} strokeWidth={2} name="Close (Sell)" yAxisId="left" />
@@ -161,6 +149,28 @@ const App = () => {
             <Scatter data={sellMarkers} dataKey="close" yAxisId="left" fill="red" shape="triangle" name="Sell" />
           </LineChart>
         </ResponsiveContainer>
+      )}
+
+      {fundamentals.length > 0 && (
+        <div style={{ marginTop: '2rem' }}>
+          <h4>📈 Free Cash Flow/Share & Tangible ROIC Over Time</h4>
+          <ResponsiveContainer width="50%" height={250}>
+            <LineChart data={fundamentals.slice().reverse()} margin={{ bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tickFormatter={d => d.slice(2)} />
+              <YAxis yAxisId="left" label={{ value: 'FCF/Share ($)', angle: -90, position: 'insideLeft' }} />
+              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} label={{ value: 'ROIC Tangible (%)', angle: 90, position: 'insideRight' }} />
+              <Tooltip formatter={(v, name) => {
+                if (name === 'FCF/Share' || name.toLowerCase().includes('cash')) return [`$${parseFloat(v).toFixed(2)}`, name];
+                if (name === 'ROIC Tangible' || name.toLowerCase().includes('roic')) return [`${parseFloat(v).toFixed(1)}%`, name];
+                return [v, name];
+              }} />
+              <Legend />
+              <Line yAxisId="left" type="monotone" dataKey="freeCashFlowPerShare" name="FCF/Share" stroke="#82ca9d" dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="returnOnTangibleAssets" name="ROIC Tangible" stroke="#ff00ff" dot={false} strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
 
       <Modal isOpen={isModalOpen} onRequestClose={() => setIsModalOpen(false)}>
