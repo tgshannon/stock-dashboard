@@ -1,4 +1,6 @@
-function buildMatrix(data, features, isClassification = false, lookahead = 1) {
+const { getLabel } = require('./rules'); // <-- Add this at the top
+
+function buildMatrix(data, features, isClassification = false, lookahead = 1, ruleSet = 'pct') {
   const knownFeatures = new Set(['close1', 'close2', 'macd', 'rsi', 'predicted']);
 
   if (!Array.isArray(features) || features.length === 0) {
@@ -30,25 +32,19 @@ function buildMatrix(data, features, isClassification = false, lookahead = 1) {
       } else if (feature === 'predicted') {
         xRow.push(data[i].predicted ?? data[i].close);
       } else {
-        xRow.push(0); // fallback for unknowns
+        xRow.push(0);
       }
     }
 
-    const futureIndex = i + lookahead;
-    if (isClassification) {
-      const current = data[i].close;
-      const future = data[futureIndex]?.close;
-      if (future !== undefined) {
-        const delta = (future - current) / current;
-        let label = 1;
-        if (delta > 0.03) label = 0;
-        else if (delta < -0.03) label = 2;
+    const future = data[i + lookahead];
+    if (isClassification && future) {
+      const labelStr = getLabel(data[i], future, ruleSet); // 'buy', 'hold', 'sell'
+      const label = labelStr === 'buy' ? 0 : labelStr === 'sell' ? 2 : 1;
 
-        X.push(xRow);
-        Y.push(label);
-        meta.push({ index: i, label });
-      }
-    } else {
+      X.push(xRow);
+      Y.push(label);
+      meta.push({ index: i, label });
+    } else if (!isClassification) {
       const yVal = data[i + 1]?.close;
       if (yVal !== undefined) {
         X.push(xRow);

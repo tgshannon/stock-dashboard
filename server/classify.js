@@ -1,14 +1,15 @@
 const tf = require('@tensorflow/tfjs-node');
 const { buildMatrix } = require('./features');
+const { getLabel } = require('./rules'); // <-- add this
 
-async function trainClassifier(data, lookahead, epochs, features) {
+async function trainClassifier(data, lookahead, epochs, features, ruleSet = 'pct') {
   if (!features || !Array.isArray(features) || features.length === 0) {
     throw new Error(`trainClassifier: invalid features passed: ${features}`);
   }
 
   console.log('🧠 [Classify] Features passed to classifier:', features);
 
-  const { X, Y, meta } = buildMatrix(data, features, true, lookahead);
+  const { X, Y, meta } = buildMatrix(data, features, true, lookahead, ruleSet); // pass ruleSet
   if (!X.length || !Y.length) {
     console.warn('⚠️ Classification skipped: no training samples.');
     return { data, accuracy: null, labelCounts: {} };
