@@ -1,4 +1,4 @@
-const { getLabel } = require('./rules'); // <-- Add this at the top
+const { getLabel } = require('./rules');
 
 function buildMatrix(data, features, isClassification = false, lookahead = 1, ruleSet = 'pct') {
   const knownFeatures = new Set(['close1', 'close2', 'macd', 'rsi', 'predicted']);
@@ -38,7 +38,8 @@ function buildMatrix(data, features, isClassification = false, lookahead = 1, ru
 
     const future = data[i + lookahead];
     if (isClassification && future) {
-      const labelStr = getLabel(data[i], future, ruleSet); // 'buy', 'hold', 'sell'
+      const history = data.slice(0, i + 1);
+      const labelStr = getLabel(data[i], future, ruleSet, history); // 'buy', 'hold', 'sell'
       const label = labelStr === 'buy' ? 0 : labelStr === 'sell' ? 2 : 1;
 
       X.push(xRow);

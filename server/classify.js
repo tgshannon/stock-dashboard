@@ -1,6 +1,6 @@
 const tf = require('@tensorflow/tfjs-node');
 const { buildMatrix } = require('./features');
-const { getLabel } = require('./rules'); // <-- add this
+const { getLabel } = require('./rules');
 
 async function trainClassifier(data, lookahead, epochs, features, ruleSet = 'pct') {
   if (!features || !Array.isArray(features) || features.length === 0) {
@@ -9,7 +9,7 @@ async function trainClassifier(data, lookahead, epochs, features, ruleSet = 'pct
 
   console.log('🧠 [Classify] Features passed to classifier:', features);
 
-  const { X, Y, meta } = buildMatrix(data, features, true, lookahead, ruleSet); // pass ruleSet
+  const { X, Y, meta } = buildMatrix(data, features, true, lookahead, ruleSet, getLabel);
   if (!X.length || !Y.length) {
     console.warn('⚠️ Classification skipped: no training samples.');
     return { data, accuracy: null, labelCounts: {} };
@@ -19,7 +19,7 @@ async function trainClassifier(data, lookahead, epochs, features, ruleSet = 'pct
   console.log('🔍 [Classify] Before training:', tf.memory());
 
   const xs = tf.tensor2d(X);
-  const ys = tf.oneHot(tf.tensor1d(Y, 'int32'), 3); // 🔥 fix: convert labels to one-hot
+  const ys = tf.oneHot(tf.tensor1d(Y, 'int32'), 3);
 
   const optimizer = tf.train.adam();
   const model = tf.sequential();

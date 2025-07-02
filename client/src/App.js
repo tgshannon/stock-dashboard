@@ -92,11 +92,16 @@ const App = () => {
           </select>
 
           <label>Rule:</label>
-          <select value={ruleSet} onChange={e => setRuleSet(e.target.value)}>
-            <option value="pct">% Price Change</option>
-            <option value="macd-cross">MACD Cross</option>
-            <option value="macd-direction">MACD Direction</option>
-          </select>
+<select
+  value={ruleSet}
+  onChange={e => setRuleSet(e.target.value)}
+  className="ml-2 p-1 border border-gray-300 rounded"
+>
+  <option value="pct">% Price Change — threshold-based</option>
+  <option value="macd-cross">MACD Cross — cross signal line</option>
+  <option value="macd-direction">MACD Direction — rising/falling</option>
+  <option value="custom-macd">Custom MACD — zero line, slope & MA</option>
+</select>
 
           <button onClick={handleGo}>Go</button>
         </div>

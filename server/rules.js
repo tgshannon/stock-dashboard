@@ -1,12 +1,14 @@
-// server/rules.js
+// rules.js
 
-function rulePct(current, future, threshold = 0.03) {
-  const change = (future - current) / current;
+// --- Rule 1: Percent Change Threshold
+function rulePct(currentClose, futureClose, threshold = 0.03) {
+  const change = (futureClose - currentClose) / currentClose;
   if (change > threshold) return 'buy';
   if (change < -threshold) return 'sell';
   return 'hold';
 }
 
+// --- Rule 2: MACD Cross
 function ruleMacdCross(current, future) {
   const macdNow = current.macd ?? 0;
   const signalNow = current.signal ?? 0;
@@ -18,6 +20,7 @@ function ruleMacdCross(current, future) {
   return 'hold';
 }
 
+// --- Rule 3: MACD Direction
 function ruleMacdDirection(current, future) {
   const macdChange = (future.macd ?? 0) - (current.macd ?? 0);
   if (macdChange > 1) return 'buy';
@@ -25,7 +28,30 @@ function ruleMacdDirection(current, future) {
   return 'hold';
 }
 
-function getLabel(current, future, ruleSet = 'pct') {
+// --- Rule 4: Custom MACD Rule (your logic)
+function ruleCustom(current, previous, prev2) {
+  // Buy when MACD crosses above zero
+  if (
+    (current.macd > 0 && previous.macd < 0) ||
+    (current.macdShort > current.macdLong && previous.macdShort < previous.macdLong) ||
+    (current.close < current.macdLong)
+  ) {
+    return 'buy';
+  }
+
+  // Sell when MACD reverses sharply
+  if (
+    (current.macd - previous.macd < -1.5) &&
+    (previous.macd - prev2.macd > 0)
+  ) {
+    return 'sell';
+  }
+
+  return 'hold';
+}
+
+// --- Main dispatcher
+function getLabel(current, future, ruleSet = 'pct', history = []) {
   switch (ruleSet) {
     case 'pct':
       return rulePct(current.close, future.close);
@@ -33,6 +59,10 @@ function getLabel(current, future, ruleSet = 'pct') {
       return ruleMacdCross(current, future);
     case 'macd-direction':
       return ruleMacdDirection(current, future);
+    case 'custom-macd':
+      const previous = history[history.length - 2] ?? current;
+      const prev2 = history[history.length - 3] ?? previous;
+      return ruleCustom(current, previous, prev2);
     default:
       return 'hold';
   }
