@@ -33,15 +33,16 @@ function ruleCustom(current, previous, prev2) {
   // Buy when MACD crosses above zero
   if (
     (current.macd > 0 && previous.macd < 0) ||
-    (current.macdShort > current.macdLong && previous.macdShort < previous.macdLong) ||
-    (current.close < current.macdLong)
+    (current.closeShortMA > current.closeLongMA && 
+      previous.closeShortMA < previous.closeLongMA) ||
+    (current.close < current.closeLongMA)
   ) {
     return 'buy';
   }
 
   // Sell when MACD reverses sharply
   if (
-    (current.macd - previous.macd < -1.5) &&
+    (current.macd - previous.macd < 0) &&
     (previous.macd - prev2.macd > 0)
   ) {
     return 'sell';
