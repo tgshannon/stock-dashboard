@@ -132,6 +132,49 @@ app.get('/api/indicators/:symbol', async (req, res) => {
   }
 });
 
+app.get('/api/evaluate', async (req, res) => {
+  try {
+    const rawSets = JSON.parse(req.query.featureSets);
+    const ruleSet = req.query.ruleSet || 'pct';
+    const lookahead = parseInt(req.query.lookahead) || 1;
+    const epochs = parseInt(req.query.epochs) || 20;
+    const symbol = req.query.symbol || 'AAPL';
+    const interval = req.query.interval || 'daily';
+
+    const fmpKey = process.env.FMP_API_KEY;
+    const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?serietype=line&apikey=${fmpKey}`;
+    const { data } = await axios.get(url);
+    const raw = [...(data?.historical || [])].reverse();
+    const enriched = addIndicators(raw);
+
+    const results = [];
+    for (const featureSet of rawSets) {
+      const { predictions, mape } = await trainAndPredict([...enriched], featureSet, epochs);
+      const { accuracy, labelCounts } = await trainClassifier(predictions, lookahead, epochs, featureSet, ruleSet);
+
+      results.push({ symbol, ruleSet, features: featureSet, mape, accuracy, labelCounts });
+    }
+
+    // Save results with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `eval-${symbol}-${timestamp}.json`;
+    const filepath = path.join(__dirname, 'logs', filename);
+
+    // Add timestamp to each result row
+    results.forEach(r => r.timestamp = timestamp);
+
+    fs.mkdirSync(path.dirname(filepath), { recursive: true });
+    fs.writeFileSync(filepath, JSON.stringify(results, null, 2));
+
+    console.log(`✅ Evaluation results saved to logs/${filename}`);
+
+    res.json(results);
+  } catch (err) {
+    console.error('❌ /api/evaluate error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
