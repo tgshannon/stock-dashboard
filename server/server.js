@@ -9,6 +9,7 @@ const { buildMatrix } = require('./features');
 const { addIndicators } = require('./indicators');
 const { trainAndPredict } = require('./predict');
 const { trainClassifier } = require('./classify');
+const { logResults } = require('./utils/logResults');
 
 const app = express();
 const PORT = 3001;
@@ -132,43 +133,65 @@ app.get('/api/indicators/:symbol', async (req, res) => {
   }
 });
 
+const VALID_RULESETS = ['pct', 'custom-macd', 'custom-ma-macd'];
+const VALID_INTERVALS = ['daily', 'monthly'];
+
 app.get('/api/evaluate', async (req, res) => {
   try {
     const rawSets = JSON.parse(req.query.featureSets);
-    const ruleSet = req.query.ruleSet || 'pct';
+    let ruleSet = req.query.ruleSet || 'pct';
     const lookahead = parseInt(req.query.lookahead) || 1;
     const epochs = parseInt(req.query.epochs) || 20;
-    const symbol = req.query.symbol || 'AAPL';
-    const interval = req.query.interval || 'daily';
+    let interval = req.query.interval || 'monthly';
 
-    const fmpKey = process.env.FMP_API_KEY;
-    const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?serietype=line&apikey=${fmpKey}`;
-    const { data } = await axios.get(url);
-    const raw = [...(data?.historical || [])].reverse();
-    const enriched = addIndicators(raw);
-
-    const results = [];
-    for (const featureSet of rawSets) {
-      const { predictions, mape } = await trainAndPredict([...enriched], featureSet, epochs);
-      const { accuracy, labelCounts } = await trainClassifier(predictions, lookahead, epochs, featureSet, ruleSet);
-
-      results.push({ symbol, ruleSet, features: featureSet, mape, accuracy, labelCounts });
+    if (!VALID_RULESETS.includes(ruleSet)) {
+      console.warn(`⚠️ Invalid ruleSet: '${ruleSet}' — defaulting to 'pct'`);
+      ruleSet = 'pct';
     }
 
-    // Save results with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `eval-${symbol}-${timestamp}.json`;
-    const filepath = path.join(__dirname, 'logs', filename);
+    if (!VALID_INTERVALS.includes(interval)) {
+      console.warn(`⚠️ Invalid interval: '${interval}' — defaulting to monthly'`);
+      interval = 'monthly';
+    }
 
-    // Add timestamp to each result row
-    results.forEach(r => r.timestamp = timestamp);
+    // Support multiple symbols via ?symbolSet=["AAPL","MSFT"]
+    let symbolSet = [];
+    if (req.query.symbolSet) {
+      try {
+        symbolSet = JSON.parse(req.query.symbolSet);
+      } catch {
+        symbolSet = [req.query.symbolSet];
+      }
+    } else if (req.query.symbol) {
+      symbolSet = [req.query.symbol];
+    } else {
+      symbolSet = ['IVV', 'QQQ'];
+    }
 
-    fs.mkdirSync(path.dirname(filepath), { recursive: true });
-    fs.writeFileSync(filepath, JSON.stringify(results, null, 2));
 
-    console.log(`✅ Evaluation results saved to logs/${filename}`);
+    const fmpKey = process.env.FMP_API_KEY;
+    const allResults = [];
 
-    res.json(results);
+    for (const symbol of symbolSet) {
+      const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?serietype=line&apikey=${fmpKey}`;
+      const { data } = await axios.get(url);
+      const raw = [...(data?.historical || [])].reverse();
+      const enriched = addIndicators(raw);
+
+      const results = [];
+      for (const featureSet of rawSets) {
+        const { predictions, mape } = await trainAndPredict([...enriched], featureSet, epochs);
+        const { accuracy, labelCounts } = await trainClassifier(predictions, lookahead, epochs, featureSet, ruleSet);
+
+        results.push({ symbol, ruleSet, interval, features: featureSet, mape, accuracy, labelCounts });
+      }
+
+      logResults(results, symbol);
+      allResults.push(...results);
+    }
+    
+    res.json(allResults);
+
   } catch (err) {
     console.error('❌ /api/evaluate error:', err);
     res.status(500).json({ error: err.message });

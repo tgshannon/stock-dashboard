@@ -5,8 +5,9 @@ node_modules/
 .env
 
 # Logs and runtime
+*.JSON
 *.log
-model_summary.csv
+*.csv
 
 # OS junk
 .DS_Store

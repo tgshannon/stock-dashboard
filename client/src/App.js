@@ -92,16 +92,16 @@ const App = () => {
           </select>
 
           <label>Rule:</label>
-<select
-  value={ruleSet}
-  onChange={e => setRuleSet(e.target.value)}
-  className="ml-2 p-1 border border-gray-300 rounded"
->
-  <option value="pct">% Price Change — threshold-based</option>
-  <option value="macd-cross">MACD Cross — cross signal line</option>
-  <option value="macd-direction">MACD Direction — rising/falling</option>
-  <option value="custom-macd">Custom MACD — zero line, slope & MA</option>
-</select>
+            <select
+              value={ruleSet}
+              onChange={e => setRuleSet(e.target.value)}
+              className="ml-2 p-1 border border-gray-300 rounded"
+            >
+              <option value="pct">% Price Change — threshold-based</option>
+              <option value="macd-cross">MACD Cross — cross signal line</option>
+              <option value="macd-direction">MACD Direction — rising/falling</option>
+              <option value="custom-macd">Custom MACD — zero line, slope & MA</option>
+            </select>
 
           <button onClick={handleGo}>Go</button>
         </div>
@@ -143,15 +143,13 @@ const App = () => {
               }}
             />
             <Legend />
-            <Line dataKey="close_buy" stroke="green" dot={false} strokeWidth={2} name="Close (Buy)" yAxisId="left" />
-            <Line dataKey="close_hold" stroke="gray" dot={false} strokeWidth={2} name="Close (Hold)" yAxisId="left" />
-            <Line dataKey="close_sell" stroke="red" dot={false} strokeWidth={2} name="Close (Sell)" yAxisId="left" />
-            <Line dataKey="predicted" stroke="#ff7300" dot={false} name="Predicted" yAxisId="left" />
+            <Line dataKey="predicted" stroke="#82CA9D" strokeWidth={5} dot={false} name="Predicted" yAxisId="left" />
+            <Line dataKey="close_buy" stroke="#00A000" dot={false} strokeWidth={2} name="Close (Buy)" yAxisId="left" />
+            <Line dataKey="close_hold" stroke="#CCCCCC" dot={false} strokeWidth={3} name="Close (Hold)" yAxisId="left" />
+            <Line dataKey="close_sell" stroke="#FF3333" dot={false} strokeWidth={2} name="Close (Sell)" yAxisId="left" />
             <Line dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" yAxisId="left" />
             <Line dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" yAxisId="left" />
             <Line dataKey="rsi" stroke="#888888" dot={false} name="RSI" yAxisId="right" />
-            <Scatter data={buyMarkers} dataKey="close" yAxisId="left" fill="green" shape="triangle" name="Buy" />
-            <Scatter data={sellMarkers} dataKey="close" yAxisId="left" fill="red" shape="triangle" name="Sell" />
           </LineChart>
         </ResponsiveContainer>
       )}

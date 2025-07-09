@@ -4,7 +4,8 @@
   "description": "Backend server for stock dashboard using FMP API and TensorFlow.js",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "eval": "node  scripts/convert-eval-to-csv.js"
   },
   "dependencies": {
     "@tensorflow/tfjs-node": "^4.15.0",
