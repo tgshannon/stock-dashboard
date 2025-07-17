@@ -32,7 +32,7 @@ async function trainClassifier(data, lookahead, epochs, features, ruleSet = 'pct
     metrics: ['categoricalAccuracy'],
   });
 
-  const result = await model.fit(xs, ys, { epochs });
+  const result = await model.fit(xs, ys, { epochs, verbose: 0 });
   console.log('📈 [Classify] Accuracy history:', result.history.categoricalAccuracy);
 
   const finalAccuracy = Array.isArray(result.history.categoricalAccuracy)

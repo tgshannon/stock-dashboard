@@ -1,7 +1,11 @@
 const { getLabel } = require('./rules');
 
 function buildMatrix(data, features, isClassification = false, lookahead = 1, ruleSet = 'pct') {
-  const knownFeatures = new Set(['close1', 'close2', 'macd', 'rsi', 'predicted']);
+  const knownFeatures = new Set([
+    'close1', 'close2', 'macd', 'macd_1', 'macd_2', 'signal',
+    'bb_upper', 'bb_lower', 'rsi',
+    'predicted', 'closeShortMA', 'closeLongMA'
+  ]);
 
   if (!Array.isArray(features) || features.length === 0) {
     throw new Error(`❌ buildMatrix: invalid features list: ${features}`);

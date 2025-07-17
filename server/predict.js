@@ -20,7 +20,7 @@ async function trainAndPredict(data, features, epochs = 20) {
   model.add(tf.layers.dense({ units: 1 }));
   model.compile({ loss: 'meanAbsolutePercentageError', optimizer });
 
-  await model.fit(xs, ys, { epochs });
+  await model.fit(xs, ys, { epochs, verbose: 0 });
 
   const preds = model.predict(xs).dataSync();
   // ✅ Add predicted values directly to the original data array

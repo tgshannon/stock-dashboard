@@ -1,216 +1,204 @@
-// ✅ Full working version of App.js — restored prediction/classification chart + fundamentals chart
 import React, { useState } from 'react';
 import axios from 'axios';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, Scatter
+  Legend, ResponsiveContainer, Scatter
 } from 'recharts';
-import Modal from 'react-modal';
+import './App.css';
+import { FaCog } from 'react-icons/fa';
 
-Modal.setAppElement('#root');
+const defaultPredictionFeaturesByRule = {
+  'pct': ['close1'],
+  'macd-cross': ['macd', 'signal'],
+  'macd-direction': ['macd'],
+  'custom-macd': ['close1', 'macd', 'closeShortMA', 'closeLongMA'],
+  'momentum-macd': ['predicted', 'macd', 'macd_1', 'macd_2']
+};
 
-const defaultFeatures = ['close1', 'close2', 'macd'];
+const defaultClassificationFeaturesByRule = {
+  'pct': ['close1'],
+  'macd-cross': ['macd'],
+  'macd-direction': ['macd'],
+  'custom-macd': ['close1', 'macd', 'closeShortMA', 'closeLongMA'],
+  'momentum-macd': ['macd', 'macd_1', 'macd_2']
+};
 
-const App = () => {
+function App() {
   const [symbol, setSymbol] = useState('AAPL');
   const [interval, setInterval] = useState('daily');
   const [ruleSet, setRuleSet] = useState('pct');
-  const [chartData, setChartData] = useState([]);
-  const [predictionFeatures, setPredictionFeatures] = useState(defaultFeatures);
-  const [classificationFeatures, setClassificationFeatures] = useState(defaultFeatures);
+  const [data, setData] = useState([]);
   const [mape, setMape] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
-  const [labelCounts, setLabelCounts] = useState(null);
-  const [actionInfo, setActionInfo] = useState(null);
+  const [labelCounts, setLabelCounts] = useState({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [fundamentals, setFundamentals] = useState([]);
 
-  const featureOptions = ['close1', 'close2', 'macd', 'rsi', 'predicted'];
+  const [predictionFeatures, setPredictionFeatures] = useState(defaultPredictionFeaturesByRule['pct']);
+  const [classificationFeatures, setClassificationFeatures] = useState(defaultClassificationFeaturesByRule['pct']);
+  const [selectedFeatures, setSelectedFeatures] = useState(defaultClassificationFeaturesByRule['pct']);
 
-  const toggleFeature = (feature, setFn, currentList) => {
-    if (currentList.includes(feature)) {
-      setFn(currentList.filter(f => f !== feature));
-    } else {
-      setFn([...currentList, feature]);
-    }
-  };
-
-  const fetchData = async () => {
+  const handleGo = async () => {
     try {
-      const res = await axios.get(`/api/indicators/${symbol}?interval=${interval}`, {
+      const response = await axios.get('http://localhost:3001/api/evaluate', {
         params: {
-          predFeatures: predictionFeatures.join(','),
-          classFeatures: classificationFeatures.join(','),
-          ruleSet
+          symbol,
+          interval,
+          ruleSet,
+          featureSets: JSON.stringify([predictionFeatures, classificationFeatures])
         }
       });
-
-      const { data, mape, accuracy, labelCounts, actionInfo, fundamentals } = res.data;
-
-      const enhancedData = data.map(d => ({
-        ...d,
-        close_buy: d.action === 'buy' ? d.close : null,
-        close_hold: d.action === 'hold' ? d.close : null,
-        close_sell: d.action === 'sell' ? d.close : null
-      }));
-
-      setChartData(enhancedData);
-      setMape(mape);
-      setActionInfo(actionInfo);
-      setAccuracy(accuracy);
-      setLabelCounts(labelCounts);
-      setFundamentals(fundamentals);
-    } catch (err) {
-      console.error('Fetch error:', err);
+      const result = response.data[0] || {};
+      setData(result.predictions || []);
+      setMape(result.mape ?? null);
+      setAccuracy(result.accuracy ?? null);
+      setLabelCounts(result.labelCounts ?? {});
+      setFundamentals(result.fundamentals || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setData([]);
     }
   };
 
-  const handleGo = () => {
-    if (!symbol || !interval) return;
-    if (predictionFeatures.length === 0 || classificationFeatures.length === 0) {
-      alert('Please select at least one feature for both prediction and classification.');
-      return;
-    }
-    fetchData();
+  const toggleFeature = (feature) => {
+    setSelectedFeatures(prev =>
+      prev.includes(feature)
+        ? prev.filter(f => f !== feature)
+        : [...prev, feature]
+    );
   };
 
-  const buyMarkers = chartData.filter(d => d.action === 'buy');
-  const sellMarkers = chartData.filter(d => d.action === 'sell');
+  const chartData = (data || []).slice(-100).map((d, i, arr) => {
+    const prev = arr[i - 1];
+    const next = arr[i + 1];
+    const macd = d.macd;
+
+    const isPeak = prev && next && macd > prev.macd && macd > next.macd;
+    const isTrough = prev && next && macd < prev.macd && macd < next.macd;
+
+    return {
+      ...d,
+      close_buy: d.action === 'buy' ? d.close : null,
+      close_hold: d.action === 'hold' ? d.close : null,
+      close_sell: d.action === 'sell' ? d.close : null,
+      macdTurn: isPeak ? 'sell' : isTrough ? 'buy' : null
+    };
+  });
 
   return (
-    <div style={{ padding: '1rem' }}>
-      <h2>Stock Dashboard</h2>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+    <div className="App">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <label>Symbol:</label>
-          <input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} style={{ width: 80 }} />
+          <input value={symbol} onChange={e => setSymbol(e.target.value)} />
 
           <label>Interval:</label>
           <select value={interval} onChange={e => setInterval(e.target.value)}>
             <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
           </select>
 
-          <label>Rule:</label>
-            <select
-              value={ruleSet}
-              onChange={e => setRuleSet(e.target.value)}
-              className="ml-2 p-1 border border-gray-300 rounded"
-            >
-              <option value="pct">% Price Change — threshold-based</option>
-              <option value="macd-cross">MACD Cross — cross signal line</option>
-              <option value="macd-direction">MACD Direction — rising/falling</option>
-              <option value="custom-macd">Custom MACD — zero line, slope & MA</option>
-            </select>
+          <label>Rule Set:</label>
+          <select
+            value={ruleSet}
+            onChange={e => {
+              const newRule = e.target.value;
+              setRuleSet(newRule);
+              const pred = defaultPredictionFeaturesByRule[newRule];
+              const classify = defaultClassificationFeaturesByRule[newRule];
+              if (pred && classify) {
+                setPredictionFeatures(pred);
+                setClassificationFeatures(classify);
+                setSelectedFeatures(classify);
+              }
+            }}
+          >
+            <option value="pct">% Price Change — threshold-based</option>
+            <option value="macd-cross">MACD Cross — cross signal line</option>
+            <option value="macd-direction">MACD Direction — rising/falling</option>
+            <option value="custom-macd">Custom MACD — zero line, slope & MA</option>
+            <option value="momentum-macd">Momentum MACD — requires macd, macd_1, macd_2</option>
+          </select>
 
           <button onClick={handleGo}>Go</button>
+          <FaCog onClick={() => setIsModalOpen(!isModalOpen)} style={{ cursor: 'pointer' }} />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <div><strong>Prediction Features:</strong> {predictionFeatures.join(', ')}</div>
-          {mape != null && <div><strong>MAPE:</strong> {mape.toFixed(4)}</div>}
-          <div><strong>Classification Features:</strong> {classificationFeatures.join(', ')}</div>
-          {accuracy != null && <div><strong>Accuracy:</strong> {(accuracy * 100).toFixed(2)}%</div>}
-          {actionInfo && <div><strong>Action:</strong> {actionInfo.label} ({(actionInfo.confidence * 100).toFixed(1)}%)</div>}
-          {labelCounts && <div>Buy: {labelCounts.buy}, Hold: {labelCounts.hold}, Sell: {labelCounts.sell}</div>}
-          <button onClick={() => setIsModalOpen(true)} style={{ marginTop: '0.5rem' }}>⚙️</button>
+        <div style={{ textAlign: 'right' }}>
+          {predictionFeatures && <p><strong>Prediction Features:</strong> {predictionFeatures.join(', ')}</p>}
+          {classificationFeatures && <p><strong>Classification Features:</strong> {classificationFeatures.join(', ')}</p>}
+          {mape !== null && <p>MAPE: {(mape * 100).toFixed(2)}%</p>}
+          {accuracy !== null && <p>Accuracy: {(accuracy * 100).toFixed(2)}%</p>}
+          {labelCounts && (
+            <div style={{ textAlign: 'right' }}>
+              <strong>Labels:</strong>
+              {Object.entries(labelCounts).map(([label, count]) => (
+                <span key={label} style={{ marginLeft: '0.5rem' }}>{label}: {count}</span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {chartData.length > 0 && (
-        <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={chartData}>
-            <CartesianGrid stroke="#ccc" />
-            <XAxis dataKey="date" />
-            <YAxis yAxisId="left" domain={['auto', 'auto']} />
-            <YAxis orientation="right" yAxisId="right" domain={[0, 100]} />
-            <Tooltip
-              content={({ active, payload, label }) => {
-                if (!active || !payload || payload.length === 0) return null;
-                const dataPoint = payload[0].payload;
-                return (
-                  <div style={{ backgroundColor: 'white', border: '1px solid #ccc', padding: '0.5rem' }}>
-                    <div><strong>{label}</strong></div>
-                    {payload.map((entry, idx) => (
-                      <div key={idx} style={{ color: entry.color }}>
-                        {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(2) : entry.value}
-                      </div>
-                    ))}
-                    {dataPoint.action && <div><strong>Class:</strong> {dataPoint.action}</div>}
-                    {dataPoint.confidence != null && <div><strong>Confidence:</strong> {(dataPoint.confidence * 100).toFixed(1)}%</div>}
-                  </div>
-                );
-              }}
-            />
-            <Legend />
-            <Line dataKey="predicted" stroke="#82CA9D" strokeWidth={5} dot={false} name="Predicted" yAxisId="left" />
-            <Line dataKey="close_buy" stroke="#00A000" dot={false} strokeWidth={2} name="Close (Buy)" yAxisId="left" />
-            <Line dataKey="close_hold" stroke="#CCCCCC" dot={false} strokeWidth={3} name="Close (Hold)" yAxisId="left" />
-            <Line dataKey="close_sell" stroke="#FF3333" dot={false} strokeWidth={2} name="Close (Sell)" yAxisId="left" />
-            <Line dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" yAxisId="left" />
-            <Line dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" yAxisId="left" />
-            <Line dataKey="rsi" stroke="#888888" dot={false} name="RSI" yAxisId="right" />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-
-      {fundamentals.length > 0 && (
-        <div style={{ marginTop: '2rem' }}>
-          <h4>📈 Free Cash Flow/Share & Tangible ROIC Over Time</h4>
-          <ResponsiveContainer width="50%" height={250}>
-            <LineChart data={fundamentals.slice().reverse()} margin={{ bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tickFormatter={d => d.slice(2)} />
-              <YAxis yAxisId="left" label={{ value: 'FCF/Share ($)', angle: -90, position: 'insideLeft' }} />
-              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} label={{ value: 'ROIC Tangible (%)', angle: 90, position: 'insideRight' }} />
-              <Tooltip formatter={(v, name) => {
-                if (name === 'FCF/Share' || name.toLowerCase().includes('cash')) return [`$${parseFloat(v).toFixed(2)}`, name];
-                if (name === 'ROIC Tangible' || name.toLowerCase().includes('roic')) return [`${parseFloat(v).toFixed(1)}%`, name];
-                return [v, name];
-              }} />
-              <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="freeCashFlowPerShare" name="FCF/Share" stroke="#82ca9d" dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="returnOnTangibleAssets" name="ROIC Tangible" stroke="#ff00ff" dot={false} strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
+      {isModalOpen && (
+        <div style={{ paddingLeft: '1rem' }}>
+          <strong>Select Features:</strong><br />
+          {[ 'close1', 'close2', 'macd', 'macd_1', 'macd_2', 'rsi', 'signal', 'predicted', 'closeShortMA', 'closeLongMA' ].map(f => (
+            <label key={f} style={{ marginRight: '1rem' }}>
+              <input
+                type="checkbox"
+                checked={selectedFeatures.includes(f)}
+                onChange={() => toggleFeature(f)}
+              /> {f}
+            </label>
+          ))}
         </div>
       )}
 
-      <Modal isOpen={isModalOpen} onRequestClose={() => setIsModalOpen(false)}>
-        <h3>Settings</h3>
-        <h4>Prediction Features</h4>
-        {featureOptions.map(f => (
-          <div key={`pred-${f}`}>
-            <label>
-              <input
-                type="checkbox"
-                checked={predictionFeatures.includes(f)}
-                onChange={() => toggleFeature(f, setPredictionFeatures, predictionFeatures)}
-              />
-              {f}
-            </label>
-          </div>
-        ))}
+      <ResponsiveContainer width="100%" height={500}>
+        <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="date" />
+          <YAxis yAxisId="left" domain={['auto', 'auto']} />
+          <YAxis yAxisId="right" orientation="right" />
+          <Tooltip />
+          <Legend />
 
-        <h4>Classification Features</h4>
-        {featureOptions.map(f => (
-          <div key={`class-${f}`}>
-            <label>
-              <input
-                type="checkbox"
-                checked={classificationFeatures.includes(f)}
-                onChange={() => toggleFeature(f, setClassificationFeatures, classificationFeatures)}
-              />
-              {f}
-            </label>
-          </div>
-        ))}
+          <Line yAxisId="left" type="monotone" dataKey="close_buy" stroke="#00A000" dot={false} strokeWidth={2} name="Close (Buy)" />
+          <Line yAxisId="left" type="monotone" dataKey="close_hold" stroke="#CCCCCC" dot={false} strokeWidth={2} name="Close (Hold)" />
+          <Line yAxisId="left" type="monotone" dataKey="close_sell" stroke="#FF3333" dot={false} strokeWidth={2} name="Close (Sell)" />
+          <Line yAxisId="left" type="monotone" dataKey="predicted" stroke="#82ca9d" dot={false} strokeWidth={4} name="Predicted" />
+          <Line yAxisId="left" type="monotone" dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" />
+          <Line yAxisId="left" type="monotone" dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" />
+          <Line yAxisId="right" type="monotone" dataKey="rsi" stroke="#888888" dot={false} name="RSI" />
 
-        <button onClick={() => setIsModalOpen(false)} style={{ marginTop: '1rem' }}>Close</button>
-      </Modal>
+          <Scatter data={chartData.filter(d => d.macdTurn === 'buy')} dataKey="close" yAxisId="left" fill="#006400" shape="star" name="MACD Turn (Buy)" />
+          <Scatter data={chartData.filter(d => d.macdTurn === 'sell')} dataKey="close" yAxisId="left" fill="#8B0000" shape="diamond" name="MACD Turn (Sell)" />
+        </LineChart>
+      </ResponsiveContainer>
+
+      {fundamentals.length > 0 && (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={fundamentals} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis yAxisId="left" domain={['auto', 'auto']} />
+            <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} />
+            <Tooltip formatter={(value, name) =>
+              name === 'returnOnTangibleAssets'
+                ? [`${(value * 100).toFixed(1)}%`, 'ROIC']
+                : [value.toFixed(2), 'Free Cash Flow']
+            }/>
+            <Legend />
+            <Line yAxisId="left" type="monotone" dataKey="freeCashFlowPerShare" stroke="#3366cc" dot={false} name="Free Cash Flow" />
+            <Line yAxisId="right" type="monotone" dataKey="returnOnTangibleAssets" stroke="#cc0000" dot={false} name="ROIC" />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
-};
+}
 
 export default App;
 

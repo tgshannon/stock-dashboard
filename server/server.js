@@ -133,7 +133,7 @@ app.get('/api/indicators/:symbol', async (req, res) => {
   }
 });
 
-const VALID_RULESETS = ['pct', 'custom-macd', 'custom-ma-macd'];
+const VALID_RULESETS = ['pct', 'custom-macd', 'macd-direction', 'macd-cross', 'momentum-macd'];
 const VALID_INTERVALS = ['daily', 'monthly'];
 
 app.get('/api/evaluate', async (req, res) => {
@@ -175,7 +175,17 @@ app.get('/api/evaluate', async (req, res) => {
     for (const symbol of symbolSet) {
       const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?serietype=line&apikey=${fmpKey}`;
       const { data } = await axios.get(url);
-      const raw = [...(data?.historical || [])].reverse();
+      let raw = [...(data?.historical || [])].reverse();
+      if (interval === 'monthly') {
+        const seen = new Set();
+        raw = raw.filter(d => {
+          const key = d.date.slice(0, 7); // YYYY-MM
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+         });
+      }
+   
       const enriched = addIndicators(raw);
 
       const results = [];
@@ -183,7 +193,7 @@ app.get('/api/evaluate', async (req, res) => {
         const { predictions, mape } = await trainAndPredict([...enriched], featureSet, epochs);
         const { accuracy, labelCounts } = await trainClassifier(predictions, lookahead, epochs, featureSet, ruleSet);
 
-        results.push({ symbol, ruleSet, interval, features: featureSet, mape, accuracy, labelCounts });
+        results.push({ symbol, ruleSet, interval, features: featureSet, mape, accuracy, labelCounts, predictions });
       }
 
       logResults(results, symbol);

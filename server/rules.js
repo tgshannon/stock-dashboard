@@ -51,8 +51,21 @@ function ruleCustom(current, previous, prev2) {
   return 'hold';
 }
 
+// --- Rule 5: MACD Momemtum Rule (ChatGPT logic)
+function ruleMomentumMACD(current) {
+  const { macd, macd_1, macd_2 } = current;
+
+  if (macd == null || macd_1 == null || macd_2 == null) return 'hold';
+
+  if (macd < 0 && macd_1 > 0 && macd_2 > 0) return 'buy';
+  if (macd > 0 && macd_1 < 0 && macd_2 < 0) return 'sell';
+  return 'hold';
+}
+
 // --- Main dispatcher
 function getLabel(current, future, ruleSet = 'pct', history = []) {
+  //console.log('[getLabel] ruleSet:', ruleSet);
+
   switch (ruleSet) {
     case 'pct':
       return rulePct(current.close, future.close);
@@ -64,6 +77,9 @@ function getLabel(current, future, ruleSet = 'pct', history = []) {
       const previous = history[history.length - 2] ?? current;
       const prev2 = history[history.length - 3] ?? previous;
       return ruleCustom(current, previous, prev2);
+    case 'momentum-macd':
+      return ruleMomentumMACD(current);
+
     default:
       return 'hold';
   }
