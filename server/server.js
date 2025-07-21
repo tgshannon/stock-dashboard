@@ -21,6 +21,33 @@ function safeFeatureParse(param, fallback) {
   return arr.length ? arr : fallback;
 }
 
+const getFundamentals = async (symbol) => {
+  try {
+    const url = `https://financialmodelingprep.com/api/v3/ratios/${symbol}?apikey=${process.env.FMP_API_KEY}`;
+    const response = await axios.get(url);
+    const raw = response.data;
+
+    if (!Array.isArray(raw) || raw.length === 0) {
+      console.warn(`⚠️ No fundamentals returned for ${symbol}`);
+      return [];
+    }
+
+    return raw
+      .filter(item => item.date && item.freeCashFlowPerShare !== null && item.returnOnEquity !== null)
+      .map(item => ({
+        date: item.date,
+        freeCashFlowPerShare: parseFloat(item.freeCashFlowPerShare) || 0,
+        returnOnEquity: parseFloat(item.returnOnEquity) || 0
+      }))
+      .reverse(); // Optional: oldest to newest
+
+  } catch (err) {
+    console.error(`❌ getFundamentals error for ${symbol}:`, err.message);
+    return [];
+  }
+};
+
+
 app.get('/api/indicators/:symbol', async (req, res) => {
   const { symbol } = req.params;
   const { interval = 'daily', predFeatures, classFeatures } = req.query;
@@ -187,13 +214,14 @@ app.get('/api/evaluate', async (req, res) => {
       }
    
       const enriched = addIndicators(raw);
-
+      const fundamentals = await getFundamentals(symbol);
+      console.log(`[✅] Fundamentals for ${symbol}:`, fundamentals);
       const results = [];
       for (const featureSet of rawSets) {
         const { predictions, mape } = await trainAndPredict([...enriched], featureSet, epochs);
         const { accuracy, labelCounts } = await trainClassifier(predictions, lookahead, epochs, featureSet, ruleSet);
 
-        results.push({ symbol, ruleSet, interval, features: featureSet, mape, accuracy, labelCounts, predictions });
+        results.push({ symbol, ruleSet, interval, features: featureSet, mape, accuracy, labelCounts, predictions, fundamentals });
       }
 
       logResults(results, symbol);

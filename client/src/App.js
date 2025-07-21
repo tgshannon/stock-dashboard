@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, Scatter
+  Legend, ResponsiveContainer, Scatter, Label
 } from 'recharts';
 import './App.css';
 import { FaCog } from 'react-icons/fa';
@@ -90,7 +90,7 @@ function App() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <label>Symbol:</label>
-          <input value={symbol} onChange={e => setSymbol(e.target.value)} />
+          <input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())} />
 
           <label>Interval:</label>
           <select value={interval} onChange={e => setInterval(e.target.value)}>
@@ -110,7 +110,7 @@ function App() {
               if (pred && classify) {
                 setPredictionFeatures(pred);
                 setClassificationFeatures(classify);
-                setSelectedFeatures(classify);
+//                setSelectedFeatures(classify);
               }
             }}
           >
@@ -125,13 +125,13 @@ function App() {
           <FaCog onClick={() => setIsModalOpen(!isModalOpen)} style={{ cursor: 'pointer' }} />
         </div>
 
-        <div style={{ textAlign: 'right' }}>
+        <div style={{ textAlign: 'left' }}>
           {predictionFeatures && <p><strong>Prediction Features:</strong> {predictionFeatures.join(', ')}</p>}
           {classificationFeatures && <p><strong>Classification Features:</strong> {classificationFeatures.join(', ')}</p>}
           {mape !== null && <p>MAPE: {(mape * 100).toFixed(2)}%</p>}
           {accuracy !== null && <p>Accuracy: {(accuracy * 100).toFixed(2)}%</p>}
           {labelCounts && (
-            <div style={{ textAlign: 'right' }}>
+            <div style={{ textAlign: 'left' }}>
               <strong>Labels:</strong>
               {Object.entries(labelCounts).map(([label, count]) => (
                 <span key={label} style={{ marginLeft: '0.5rem' }}>{label}: {count}</span>
@@ -143,13 +143,33 @@ function App() {
 
       {isModalOpen && (
         <div style={{ paddingLeft: '1rem' }}>
-          <strong>Select Features:</strong><br />
-          {[ 'close1', 'close2', 'macd', 'macd_1', 'macd_2', 'rsi', 'signal', 'predicted', 'closeShortMA', 'closeLongMA' ].map(f => (
-            <label key={f} style={{ marginRight: '1rem' }}>
+          <strong>Prediction Features:</strong><br />
+          {['close1', 'close2', 'macd', 'macd_1', 'macd_2', 'rsi', 'signal', 'predicted', 'closeShortMA', 'closeLongMA'].map(f => (
+            <label key={`pred-${f}`} style={{ marginRight: '1rem' }}>
               <input
                 type="checkbox"
-                checked={selectedFeatures.includes(f)}
-                onChange={() => toggleFeature(f)}
+                checked={predictionFeatures.includes(f)}
+                onChange={() =>
+                  setPredictionFeatures(prev =>
+                    prev.includes(f) ? prev.filter(p => p !== f) : [...prev, f]
+                  )
+                }
+              /> {f}
+            </label>
+          ))}
+
+          <br /><br />
+          <strong>Classification Features:</strong><br />
+          {['close1', 'close2', 'macd', 'macd_1', 'macd_2', 'rsi', 'signal', 'predicted', 'closeShortMA', 'closeLongMA'].map(f => (
+            <label key={`class-${f}`} style={{ marginRight: '1rem' }}>
+              <input
+                type="checkbox"
+                checked={classificationFeatures.includes(f)}
+                onChange={() =>
+                  setClassificationFeatures(prev =>
+                    prev.includes(f) ? prev.filter(c => c !== f) : [...prev, f]
+                  )
+                }
               /> {f}
             </label>
           ))}
@@ -162,13 +182,20 @@ function App() {
           <XAxis dataKey="date" />
           <YAxis yAxisId="left" domain={['auto', 'auto']} />
           <YAxis yAxisId="right" orientation="right" />
-          <Tooltip />
+          <Tooltip 
+            formatter={(value, name) => {
+              if (typeof value === 'number') {
+                return [value.toFixed(2), name]; 
+              }
+                return [value, name];
+              }}
+          />
           <Legend />
 
           <Line yAxisId="left" type="monotone" dataKey="close_buy" stroke="#00A000" dot={false} strokeWidth={2} name="Close (Buy)" />
-          <Line yAxisId="left" type="monotone" dataKey="close_hold" stroke="#CCCCCC" dot={false} strokeWidth={2} name="Close (Hold)" />
+          <Line yAxisId="left" type="monotone" dataKey="close_hold" stroke="#94b9eb" dot={false} strokeWidth={2} name="Close (Hold)" />
           <Line yAxisId="left" type="monotone" dataKey="close_sell" stroke="#FF3333" dot={false} strokeWidth={2} name="Close (Sell)" />
-          <Line yAxisId="left" type="monotone" dataKey="predicted" stroke="#82ca9d" dot={false} strokeWidth={4} name="Predicted" />
+          <Line yAxisId="left" type="monotone" dataKey="predicted" stroke="#82ca9d" dot={false} strokeWidth={2} name="Predicted" />
           <Line yAxisId="left" type="monotone" dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" />
           <Line yAxisId="left" type="monotone" dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" />
           <Line yAxisId="right" type="monotone" dataKey="rsi" stroke="#888888" dot={false} name="RSI" />
@@ -179,20 +206,34 @@ function App() {
       </ResponsiveContainer>
 
       {fundamentals.length > 0 && (
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={fundamentals} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+        <ResponsiveContainer width="45%" height={300}>
+          <LineChart data={fundamentals} margin={{ top: 20, right: 30, left: 50, bottom: 45 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis yAxisId="left" domain={['auto', 'auto']} />
-            <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} />
+            <XAxis dataKey="date" >
+              <Label value="Date" offset={-30} position="insideBottom" />
+            </XAxis>
+
+            <YAxis yAxisId="left" domain={['auto', 'auto']} tickFormatter={(v) => `$${v.toFixed(2)}`} >
+              <Label value="Free Cash Flow" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} />
+            </YAxis>
+
+            <YAxis 
+              yAxisId="right"
+              orientation="right"
+              domain={[0, 'auto']} // scale 0% to 30%
+              tickFormatter={(v) => `${v.toFixed(1)}%`}
+            >
+              <Label value="ROI (%)" angle={90} position="insideRight" style={{ textAnchor: 'middle' }} />
+            </YAxis>
+
             <Tooltip formatter={(value, name) =>
-              name === 'returnOnTangibleAssets'
-                ? [`${(value * 100).toFixed(1)}%`, 'ROIC']
+              name === 'ROE'
+                ? [`${(value * 1).toFixed(1)}%`, 'ROE']
                 : [value.toFixed(2), 'Free Cash Flow']
             }/>
             <Legend />
             <Line yAxisId="left" type="monotone" dataKey="freeCashFlowPerShare" stroke="#3366cc" dot={false} name="Free Cash Flow" />
-            <Line yAxisId="right" type="monotone" dataKey="returnOnTangibleAssets" stroke="#cc0000" dot={false} name="ROIC" />
+            <Line yAxisId="right" type="monotone" dataKey="returnOnEquity" stroke="#cc0000" dot={false} name="ROE" />
           </LineChart>
         </ResponsiveContainer>
       )}
