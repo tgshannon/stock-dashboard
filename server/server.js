@@ -104,6 +104,14 @@ app.get('/api/indicators/:symbol', async (req, res) => {
       ruleSet
     );
 
+// Assign predictedAction back to predictions for frontend chart
+    predictions.forEach((d, i) => {
+      if (updatedData[i] && updatedData[i].predictedAction) {
+        d.predictedAction = updatedData[i].predictedAction;
+      }
+    });
+    console.log('Sample chartData:', chartData.find(d => d.predicted_buy || d.predicted_hold || d.predicted_sell));
+
     const {
       updatedData = predictions,
       accuracy = 0,
@@ -140,7 +148,9 @@ app.get('/api/indicators/:symbol', async (req, res) => {
         bb_upper: d.bb_upper,
         bb_lower: d.bb_lower,
         rsi: d.rsi,
-        action: d.action
+        macd: d.macd,
+        action: d.action,
+        predictedAction: d.predictedAction
       })),
       mape,
       accuracy,
@@ -219,9 +229,39 @@ app.get('/api/evaluate', async (req, res) => {
       const results = [];
       for (const featureSet of rawSets) {
         const { predictions, mape } = await trainAndPredict([...enriched], featureSet, epochs);
-        const { accuracy, labelCounts } = await trainClassifier(predictions, lookahead, epochs, featureSet, ruleSet);
+        const { accuracy, labelCounts, updatedData } = await trainClassifier(predictions, lookahead, epochs, featureSet, ruleSet);
 
-        results.push({ symbol, ruleSet, interval, features: featureSet, mape, accuracy, labelCounts, predictions, fundamentals });
+// Assign predictedAction back to predictions for frontend chart
+    predictions.forEach((d, i) => {
+      if (updatedData[i] && updatedData[i].actionLabel) {
+        d.predictedAction = updatedData[i].actionLabel;
+      }
+    });
+   console.log('Sample predictions:', predictions[1]);
+
+//        results.push({ symbol, ruleSet, interval, features: featureSet, mape, accuracy, labelCounts, predictions, fundamentals });
+        results.push({
+          symbol,
+          ruleSet,
+          interval,
+          features: featureSet,
+          mape,
+          accuracy,
+          labelCounts,
+          fundamentals,
+          predictions: predictions.slice(-100).map(d => ({
+
+            date: d.date,
+            close: d.close,
+            predicted: d.predicted,
+            bb_upper: d.bb_upper,
+            bb_lower: d.bb_lower,
+            rsi: d.rsi,
+            macd: d.macd,
+            action: d.action,
+            predictedAction: d.predictedAction
+          }))
+        });
       }
 
       logResults(results, symbol);

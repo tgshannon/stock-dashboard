@@ -34,6 +34,10 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [fundamentals, setFundamentals] = useState([]);
 
+  const [showRSI, setShowRSI] = useState(true);
+  const [showBB, setShowBB] = useState(true);
+  const [showPredicted, setShowPredicted] = useState(true);
+
   const [predictionFeatures, setPredictionFeatures] = useState(defaultPredictionFeaturesByRule['pct']);
   const [classificationFeatures, setClassificationFeatures] = useState(defaultClassificationFeaturesByRule['pct']);
   const [selectedFeatures, setSelectedFeatures] = useState(defaultClassificationFeaturesByRule['pct']);
@@ -68,6 +72,8 @@ function App() {
     );
   };
 
+  console.log("Sample data before chartData:", data[0]);
+
   const chartData = (data || []).slice(-100).map((d, i, arr) => {
     const prev = arr[i - 1];
     const next = arr[i + 1];
@@ -78,9 +84,14 @@ function App() {
 
     return {
       ...d,
-      close_buy: d.action === 'buy' ? d.close : null,
+      close_buy: d.action === 'buy' ? d.close : null,                // ruleSet prediction
       close_hold: d.action === 'hold' ? d.close : null,
       close_sell: d.action === 'sell' ? d.close : null,
+
+      predicted_buy: d.predictedAction === 'buy' ? d.predicted : null,   // classifier prediction
+      predicted_hold: d.predictedAction === 'hold' ? d.predicted : null,
+      predicted_sell: d.predictedAction === 'sell' ? d.close : null,
+
       macdTurn: isPeak ? 'sell' : isTrough ? 'buy' : null
     };
   });
@@ -176,29 +187,57 @@ function App() {
         </div>
       )}
 
+      <div style={{ display: 'flex', gap: '1rem', padding: '0.5rem 1rem' }}>
+        <label>
+          <input type="checkbox" checked={showRSI} onChange={() => setShowRSI(!showRSI)} />
+          RSI
+        </label>
+        <label>
+          <input type="checkbox" checked={showBB} onChange={() => setShowBB(!showBB)} />
+          Bollinger Bands
+        </label>
+        <label>
+          <input type="checkbox" checked={showPredicted} onChange={() => setShowPredicted(!showPredicted)} />
+          Predicted Price
+        </label>
+      </div>
+
+
       <ResponsiveContainer width="100%" height={500}>
         <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" />
           <YAxis yAxisId="left" domain={['auto', 'auto']} />
           <YAxis yAxisId="right" orientation="right" />
-          <Tooltip 
-            formatter={(value, name) => {
-              if (typeof value === 'number') {
-                return [value.toFixed(2), name]; 
+            <Tooltip
+              formatter={(value, name) =>
+                typeof value === 'number' ? [value.toFixed(2), name] : [value, name]
               }
-                return [value, name];
-              }}
-          />
+            />
           <Legend />
 
-          <Line yAxisId="left" type="monotone" dataKey="close_buy" stroke="#00A000" dot={false} strokeWidth={2} name="Close (Buy)" />
-          <Line yAxisId="left" type="monotone" dataKey="close_hold" stroke="#94b9eb" dot={false} strokeWidth={2} name="Close (Hold)" />
-          <Line yAxisId="left" type="monotone" dataKey="close_sell" stroke="#FF3333" dot={false} strokeWidth={2} name="Close (Sell)" />
-          <Line yAxisId="left" type="monotone" dataKey="predicted" stroke="#82ca9d" dot={false} strokeWidth={2} name="Predicted" />
-          <Line yAxisId="left" type="monotone" dataKey="bb_upper" stroke="#00C49F" dot={false} name="BB Upper" />
-          <Line yAxisId="left" type="monotone" dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" />
-          <Line yAxisId="right" type="monotone" dataKey="rsi" stroke="#888888" dot={false} name="RSI" />
+          <Line yAxisId="left" type="monotone" dataKey="close_buy" stroke="#00A000" dot={true} strokeWidth={2} name="Close (Buy)" />
+          <Line yAxisId="left" type="monotone" dataKey="close_hold" stroke="#94b9eb" dot={true} strokeWidth={2} name="Close (Hold)" />
+          <Line yAxisId="left" type="monotone" dataKey="close_sell" stroke="#FF3333" dot={true}  strokeWidth={2} name="Close (Sell)" />
+
+          {showPredicted && (
+            <Line yAxisId="left" type="monotone" dataKey="predicted" stroke="#82ca9d" dot={true} strokeWidth={2} name="Predicted" />
+          )}
+
+          {showBB && (
+              <Line yAxisId="left" type="monotone" dataKey="bb_upper" stroke="#00C49F" dot={true} name="BB Upper" />
+          )}
+          {showBB && (
+              <Line yAxisId="left" type="monotone" dataKey="bb_lower" stroke="#FFBB28" dot={false} name="BB Lower" />
+          )}
+
+          {showRSI && (
+            <Line yAxisId="right" type="monotone" dataKey="rsi" stroke="#888888" dot={false} name="RSI" />
+          )}
+
+          <Line yAxisId="left" type="monotone" dataKey="predicted_buy" stroke="#006400" strokeDasharray="5 2" dot={false} name="Predicted (Buy)" />
+          <Line yAxisId="left" type="monotone" dataKey="predicted_hold" stroke="#999999" strokeDasharray="5 2" dot={false} name="Predicted (Hold)" />
+          <Line yAxisId="left" type="monotone" dataKey="predicted_sell" stroke="#990000" strokeDasharray="5 2" dot={false} name="Predicted (Sell)" />
 
           <Scatter data={chartData.filter(d => d.macdTurn === 'buy')} dataKey="close" yAxisId="left" fill="#006400" shape="star" name="MACD Turn (Buy)" />
           <Scatter data={chartData.filter(d => d.macdTurn === 'sell')} dataKey="close" yAxisId="left" fill="#8B0000" shape="diamond" name="MACD Turn (Sell)" />
